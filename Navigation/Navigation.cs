@@ -1,0 +1,82 @@
+﻿using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+
+/* Navigation script takes care of getting the vehicleModel from A to B. 
+ * For example the list of "B points" can be given by the Astar algorithm */
+public class Navigation {
+
+	public enum modelType{
+		kinematic,
+		differential,
+		car
+	}
+	
+	private VehicleModel model;
+	private Astar pathFinder = null;
+	private LinkedList<Vector3> path = null;
+	private Vector3 goalPosition;
+	private LinkedList<Vector3>.Enumerator en;
+	private bool isPathInProgress = false;
+
+	public Navigation (GameObject oggetto, modelType mt = modelType.car) {
+		switch (mt) {
+		case modelType.kinematic:
+			this.model = new KinematicVehicleModel(oggetto.gameObject);
+			break;
+		case modelType.differential:
+			this.model = new DifferentialVehicleModel(oggetto.gameObject); 
+			break;
+		case modelType.car:
+			this.model = new CarVehicleModel (oggetto.gameObject);
+			break;
+		default:
+			break;
+		}	
+	}
+
+	//returns true if arrived and navigation completed
+	public bool navigateEuclideanTo(Vector3 destination){
+		return !model.updateModel(destination); 
+	}
+	public void stop(){
+		model.updateModel(model.getVehicle().transform.position);
+	}
+
+	private void computeAstar(Vector3 goalPosition){
+		this.goalPosition = goalPosition;
+		this.goalPosition.y = model.getVehicle().transform.position.y; // keep closeness-to-the-goal-control in 2D
+
+		/* compute Astar */
+		pathFinder = new Astar(MyUtils.precisionAstar,MyUtils.droneRadius,false);
+		if(pathFinder.setNewTargetPosition(goalPosition)==true){ //set the target for A* algorithm
+			pathFinder.AstarBestPathFrom(model.getVehicle().transform.position);
+			path = pathFinder.getSolution();
+			en = path.GetEnumerator();
+			en.MoveNext();
+			isPathInProgress = true;
+			//path = Chromosome.allPairPathsMatrix[CHromo,];
+		}
+		else Debug.Log("Target position unreachable");
+		if (path == null) Debug.Log ("Astar failed!");
+
+	}
+
+	public bool navigateAstarTo(Vector3 destination){
+
+		/* If Astar path exists I follow it */
+		if(isPathInProgress==true){
+			if(model.updateModel (en.Current) == false){ //if false, model is arrived and need to change hop
+				//if I arrived to the hop, go to next hop with MoveNext
+				if(en.MoveNext()==false) { //if no next element then I am arrived and return true
+					isPathInProgress = false; 
+					return true;
+				}
+			}
+		}
+		else computeAstar(destination);
+		return false;
+	}
+}
+
+
